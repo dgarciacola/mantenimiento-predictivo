@@ -75,7 +75,8 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.0.4</version>
+            <!-- 3.x = rama de springdoc compatible con Spring Boot 4.x (la 2.0.x era para Boot 3.0) -->
+            <version>3.1.1</version>
         </dependency>
 
         <!-- 8. SPRING BOOT TEST - JUnit 5, Mockito, AssertJ -->

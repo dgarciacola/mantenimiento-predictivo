@@ -11,6 +11,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -64,6 +68,8 @@ import java.util.stream.Collectors;
  * - GET /api/sensors/{sensorId}/history
  * - etc
  */
+// @Tag agrupa todos los endpoints de esta clase bajo un título en Swagger UI
+@Tag(name = "Sensor Data", description = "Ingesta de lecturas IoT, histórico y alertas críticas")
 @RestController
 @RequestMapping("/api/sensors")
 @Slf4j
@@ -123,6 +129,12 @@ public class SensorController {
      * @param dto - Datos del sensor (temperature, vibration, current)
      * @return ResponseEntity con status 201 y datos guardados
      */
+    @Operation(summary = "Ingestar lectura de sensor",
+               description = "Valida rangos, calcula el estado (NORMAL/WARNING/CRITICAL), guarda en PostgreSQL y cachea en Redis")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "Lectura guardada"),
+        @ApiResponse(responseCode = "400", description = "Datos fuera de rango o campos obligatorios ausentes")
+    })
     @PostMapping("/data")
     public ResponseEntity<Map<String, Object>> saveSensorData(
             @Valid @RequestBody SensorReadingDTO dto) {
@@ -194,6 +206,12 @@ public class SensorController {
      * @param sensorId - ID del sensor desde la URL
      * @return ResponseEntity con historial completo
      */
+    @Operation(summary = "Historial de un sensor",
+               description = "Últimas 24 h de lecturas (máx. 8640), más recientes primero. Lee de Redis y cae a PostgreSQL si hace falta")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Historial devuelto"),
+        @ApiResponse(responseCode = "404", description = "El sensor no existe o no tiene lecturas")
+    })
     @GetMapping("/{sensorId}/history")
     public ResponseEntity<Map<String, Object>> getSensorHistory(
             @PathVariable String sensorId) {
@@ -249,6 +267,12 @@ public class SensorController {
      * @param endTime - Fin del rango
      * @return Lecturas en el rango
      */
+    @Operation(summary = "Lecturas por rango temporal",
+               description = "Devuelve las lecturas entre startTime y endTime (ISO-8601)")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Lecturas del rango"),
+        @ApiResponse(responseCode = "400", description = "startTime posterior a endTime")
+    })
     @GetMapping("/{sensorId}/history/time-range")
     public ResponseEntity<Map<String, Object>> getReadingsByTimeRange(
             @PathVariable String sensorId,
@@ -311,6 +335,11 @@ public class SensorController {
      *
      * @return Lista de sensores únicos
      */
+    @Operation(summary = "Listar sensores",
+               description = "IDs de todos los sensores con lecturas")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Lista de sensores")
+    })
     @GetMapping("/list")
     public ResponseEntity<Map<String, Object>> listAllSensors() {
 
@@ -361,6 +390,11 @@ public class SensorController {
      *
      * @return Estado del API
      */
+    @Operation(summary = "Health check",
+               description = "Comprueba que el servicio de sensores está activo")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Servicio activo")
+    })
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> healthCheck() {
 
@@ -415,6 +449,11 @@ public class SensorController {
      *
      * @return Todas las lecturas críticas
      */
+    @Operation(summary = "Alertas críticas",
+               description = "Lecturas en estado CRITICAL, más recientes primero")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Alertas devueltas")
+    })
     @GetMapping("/critical")
     public ResponseEntity<Map<String, Object>> getCriticalAlerts() {
 
