@@ -88,20 +88,28 @@ spring:
   # ═════════════════════════════════════════════════════════════════
   # 5. REDIS - Cache Configuration
   # ═════════════════════════════════════════════════════════════════
-  redis:
-    host: localhost
-    port: 6379
-    password:
-    timeout: 2000ms
-    database: 0                         # Base de datos (0-15)
+  # NOTA (Spring Boot 3+/4): la configuración de Redis vive bajo "spring.data.redis".
+  # Antes (Boot 2.x) era "spring.redis"; con esa ruta antigua Spring IGNORA estos valores
+  # y usa los de por defecto (localhost:6379), lo que pasaba desapercibido en local.
+  # En Docker se sobrescribe con la variable SPRING_DATA_REDIS_HOST (ver docker-compose.yml).
+  # "timeout" acota cuánto espera cada comando a Redis: con Redis caído el servicio
+  # tarda como máximo 2 s en caer a PostgreSQL (ver SensorReadingService).
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      timeout: 2000ms
+      database: 0                         # Base de datos (0-15)
 
-    # Jedis client config
-    jedis:
-      pool:
-        max-active: 8                  # Máximo de conexiones
-        max-idle: 8
-        min-idle: 0
-        max-wait: -1ms
+      # Pool de Jedis: Spring Boot usa por defecto el cliente Lettuce, así que este bloque
+      # no tiene efecto salvo que se añada la dependencia de Jedis. Se deja como referencia.
+      jedis:
+        pool:
+          max-active: 8                  # Máximo de conexiones
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
 
 
 # ═══════════════════════════════════════════════════════════════════
