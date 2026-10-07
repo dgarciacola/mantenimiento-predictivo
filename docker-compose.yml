@@ -156,6 +156,34 @@ services:
       resources:
         limits:
           memory: 256M
+# ═════════════════════════════════════════════════════════════════════
+# BACKEND - API Spring Boot (se construye con backend/Dockerfile)
+# ═════════════════════════════════════════════════════════════════════
+# Dentro de la red de Docker los servicios se ven por NOMBRE: la app usa
+# "postgres" y "redis" como hosts (NO localhost, que dentro del contenedor
+# sería el propio contenedor del backend).
+# Las variables SPRING_* sobrescriben application.yml (relaxed binding de Spring Boot):
+#   SPRING_DATASOURCE_URL  ->  spring.datasource.url
+#   SPRING_DATA_REDIS_HOST ->  spring.data.redis.host
+  backend:
+    build: ./backend
+    container_name: predictive-maintenance-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/predictive_maintenance_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres123
+      SPRING_DATA_REDIS_HOST: redis
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy   # espera a que PostgreSQL esté listo (healthcheck)
+      redis:
+        condition: service_healthy
+    networks:
+      - predictive-network
+    restart: unless-stopped
+
 
 
 # ═══════════════════════════════════════════════════════════════════

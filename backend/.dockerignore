@@ -1,0 +1,9 @@
+# Archivos que NO se envían a Docker al construir la imagen
+# (más rápido y evita meter basura o datos locales en la imagen)
+target/
+logs/
+.git/
+.idea/
+.vscode/
+*.md
+*.log
