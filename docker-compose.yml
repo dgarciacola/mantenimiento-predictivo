@@ -1,0 +1,333 @@
+# ═══════════════════════════════════════════════════════════════════
+# docker-compose.yml - Infrastructure as Code
+# ═══════════════════════════════════════════════════════════════════
+#
+# Este archivo levanta TODA la infraestructura necesaria:
+# - PostgreSQL (Base de datos)
+# - Redis (Cache)
+# - pgAdmin (UI para PostgreSQL)
+#
+# ¿POR QUÉ DOCKER?
+# ================
+# Sin Docker:
+# 1. Instalar PostgreSQL en tu Mac
+# 2. Instalar Redis en tu Mac
+# 3. Configurar puertos
+# 4. Gestionar servicios manualmente
+# 5. ¿Qué pasa si quieres cambiar versión?
+# = PROBLEMA: Contaminación del sistema
+#
+# Con Docker:
+# 1. docker-compose up -d
+# 2. Listo, todo aislado en contenedores
+# 3. Compartible (otros developers hacen lo mismo)
+# 4. Reproducible (mismas versiones siempre)
+# = SOLUCIÓN: Clean, portable, colaborativo
+#
+
+version: '3.8'
+
+services:
+  # ═══════════════════════════════════════════════════════════════════
+  # PostgreSQL - Base de datos relacional
+  # ═══════════════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:15-alpine
+    # ¿Por qué 15-alpine?
+    # - postgres:15 = versión 15 (estable, soportada)
+    # - alpine = imagen mínima Linux (solo ~150MB vs 300MB)
+
+    container_name: predictive-maintenance-postgres
+
+    environment:
+      # Credenciales de BD
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: predictive_maintenance_db
+      # TZ: America/New_York  # Timezone (opcional)
+      PGTZ: UTC               # Timezone de PostgreSQL
+
+    ports:
+      - "5432:5432"           # host:container
+      # Tu Mac: localhost:5432
+      # Contenedor: 5432
+
+    volumes:
+      # Persistencia de datos (la BD no se pierde si apagas Docker)
+      - postgres_data:/var/lib/postgresql/data
+      # Named volume: docker maneja la ruta automáticamente
+
+      # Inicializar BD con SQL (opcional)
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+    networks:
+      - predictive-network
+
+    healthcheck:
+      # Verificar si PostgreSQL está healthy
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    # Recursos
+    deploy:
+      resources:
+        limits:
+          cpus: '1'           # Máximo 1 CPU
+          memory: 512M        # Máximo 512MB RAM
+        reservations:
+          memory: 256M        # Mínimo reservado
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Redis - Cache en memoria
+  # ═══════════════════════════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    # ¿Por qué Redis?
+    # - Muy rápido (en memoria)
+    # - Ideal para cache
+    # - Soporta estructuras (strings, lists, sets, hashes)
+    # - Opciones: expire keys automáticamente
+
+    container_name: predictive-maintenance-redis
+
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    # ¿Qué hace?
+    # --appendonly yes: Persistencia (AOF file)
+    # --maxmemory 256mb: Máximo 256MB en memoria
+    # --maxmemory-policy allkeys-lru: Si llena, borra menos usados
+
+    ports:
+      - "6379:6379"           # host:container (puerto estándar Redis)
+
+    volumes:
+      - redis_data:/data
+      # Guarda AOF file (log de comandos)
+
+    networks:
+      - predictive-network
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ═══════════════════════════════════════════════════════════════════
+  # pgAdmin - UI Web para PostgreSQL
+  # ═══════════════════════════════════════════════════════════════════
+  pgadmin:
+    image: dpage/pgadmin4
+    # Interface web para PostgreSQL
+    # Acceso: http://localhost:5050
+    # Usuario: admin@predictive.local
+    # Password: admin123
+
+    container_name: predictive-maintenance-pgadmin
+
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@predictive.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+
+    ports:
+      - "5050:80"             # host:container
+      # Tu Mac: http://localhost:5050
+
+    networks:
+      - predictive-network
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # No inicia pgAdmin hasta que PostgreSQL esté healthy
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+
+# ═══════════════════════════════════════════════════════════════════
+# VOLUMES - Almacenamiento persistente
+# ═══════════════════════════════════════════════════════════════════
+volumes:
+  postgres_data:
+    # Datos de PostgreSQL
+    # Docker los guarda en su directorio (automático)
+    # Persisten aunque hagas docker-compose down
+    # Para borrar: docker volume rm postgres_data
+
+  redis_data:
+    # AOF file de Redis
+    # Guarda comandos ejecutados
+
+
+# ═══════════════════════════════════════════════════════════════════
+# NETWORKS - Aislamiento de red
+# ═══════════════════════════════════════════════════════════════════
+networks:
+  predictive-network:
+    driver: bridge
+    # Los 3 servicios se conectan entre sí
+    # PostgreSQL puede hablar con Redis, etc
+    # Pero aislado de otros contenedores
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CÓMO USAR ESTE ARCHIVO
+# ═══════════════════════════════════════════════════════════════════
+#
+# 1️⃣  LEVANTAR SERVICIOS:
+#    cd /Users/davgarcol05/Desktop/predictive-maintenance
+#    docker-compose up -d
+#
+#    -d = detached (corre en background)
+#    Sin -d = ve los logs en vivo (Ctrl+C para parar)
+#
+# 2️⃣  VER SERVICIOS CORRIENDO:
+#    docker-compose ps
+#
+#    Debería ver:
+#    - predictive-maintenance-postgres (healthy)
+#    - predictive-maintenance-redis (healthy)
+#    - predictive-maintenance-pgadmin (running)
+#
+# 3️⃣  VER LOGS:
+#    docker-compose logs -f postgres       # PostgreSQL logs
+#    docker-compose logs -f redis          # Redis logs
+#    docker-compose logs -f pgadmin        # pgAdmin logs
+#
+#    -f = follow (actualizaciones en vivo)
+#
+# 4️⃣  ACCEDER A POSTGRESQL:
+#
+#    Opción A - línea de comandos:
+#    docker-compose exec postgres psql -U postgres -d predictive_maintenance_db
+#
+#    Opción B - pgAdmin (UI web):
+#    http://localhost:5050
+#    Usuario: admin@predictive.local
+#    Password: admin123
+#
+#    Luego:
+#    - Click derecho en "Servers" → Create → Server
+#    - Nombre: "Predictive Maintenance"
+#    - Host: postgres (nombre del servicio)
+#    - User: postgres
+#    - Password: postgres123
+#
+# 5️⃣  ACCEDER A REDIS:
+#
+#    docker-compose exec redis redis-cli
+#
+#    Comandos útiles:
+#    > PING                    # Verificar conexión
+#    > KEYS *                  # Ver todas las keys
+#    > GET key_name            # Ver valor
+#    > FLUSHALL                # Limpiar caché (PELIGRO!)
+#    > MONITOR                 # Ver comandos en tiempo real
+#
+# 6️⃣  PARAR SERVICIOS:
+#    docker-compose down
+#
+#    Opciones:
+#    -v = También borra volumes (CUIDADO: pierdes datos)
+#    --remove-orphans = Borra contenedores huérfanos
+#
+# 7️⃣  REINICIAR SERVICIOS:
+#    docker-compose restart
+#
+#    O reiniciar uno específico:
+#    docker-compose restart postgres
+#
+# 8️⃣  REBUILD (si cambias la imagen):
+#    docker-compose build
+#    docker-compose up -d
+#
+# 9️⃣  VER RECURSOS USADOS:
+#    docker stats
+#
+#    Muestra CPU, RAM, I/O de cada contenedor
+#
+
+# ═══════════════════════════════════════════════════════════════════
+# TROUBLESHOOTING
+# ═══════════════════════════════════════════════════════════════════
+#
+# ❌ Error: "Address already in use" port 5432
+# ✅ Solución: Ya tienes PostgreSQL en tu Mac
+#    lsof -ti:5432 | xargs kill -9
+#    O cambia port en docker-compose: "5433:5432"
+#
+# ❌ Error: "Cannot connect to PostgreSQL"
+# ✅ Solución: Espera a que sea healthy
+#    docker-compose ps
+#    Ver si status es "healthy"
+#
+# ❌ Error: "Redis connection refused"
+# ✅ Solución: Verifica que Redis esté corriendo
+#    docker-compose logs redis
+#
+# ❌ Perdí datos de PostgreSQL
+# ✅ Solución: Los datos están en postgres_data volume
+#    docker volume ls
+#    docker volume inspect postgres_data
+#
+# ❌ Quiero borrar todo y empezar de cero
+# ✅ Solución:
+#    docker-compose down -v
+#    docker volume rm postgres_data redis_data
+#    docker-compose up -d
+#
+
+# ═══════════════════════════════════════════════════════════════════
+# VARIABLES DE ENTORNO PARA application.yml
+# ═══════════════════════════════════════════════════════════════════
+#
+# En application.yml usamos:
+# spring:
+#   datasource:
+#     url: jdbc:postgresql://localhost:5432/predictive_maintenance_db
+#     username: postgres
+#     password: postgres123
+#   redis:
+#     host: localhost
+#     port: 6379
+#
+# Estos valores coinciden con este docker-compose.yml
+#
+# En PRODUCCIÓN, cambiarías:
+# - localhost → cloud-db-server.example.com
+# - password → ***secure***
+# - Conectaría a servicios cloud (AWS RDS, Azure Database, etc)
+#
+
+# ═══════════════════════════════════════════════════════════════════
+# BEST PRACTICES
+# ═══════════════════════════════════════════════════════════════════
+#
+# ✅ DO:
+# - Usar version: '3.8' (compatible con Docker 19.03+)
+# - Nombrar servicios descriptivamente
+# - Usar healthchecks
+# - Limitar recursos (memoria, CPU)
+# - Persistencia con volumes
+# - Documentar en comentarios
+#
+# ❌ DON'T:
+# - Hardcodear passwords en producción (usar secrets)
+# - Cambiar versiones de imágenes sin probar
+# - Compartir docker-compose.yml con credenciales reales
+# - Olvidar hacer backup de volumes
+#

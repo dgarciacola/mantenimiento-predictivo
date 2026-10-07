@@ -1,0 +1,268 @@
+# ═══════════════════════════════════════════════════════════════════
+# application.yml - Configuración de Spring Boot
+# ═══════════════════════════════════════════════════════════════════
+#
+# Este archivo configura TODA la aplicación:
+# - Puerto del servidor
+# - Conexión a PostgreSQL
+# - Conexión a Redis
+# - JPA/Hibernate
+# - Logging
+# - Swagger/OpenAPI
+#
+# NOTA: En producción, estos valores se overridean con variables de entorno
+# o un application-prod.yml separado
+#
+
+# ═══════════════════════════════════════════════════════════════════
+# 1. SERVIDOR - Puerto y contexto
+# ═══════════════════════════════════════════════════════════════════
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+  # Configuración de Tomcat (embedded)
+  tomcat:
+    threads:
+      max: 200           # Máximo de threads concurrentes
+      min-spare: 10      # Threads en standby
+    max-connections: 10000
+    connection-timeout: 20000ms
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 2. APLICACIÓN - Nombre y versión
+# ═══════════════════════════════════════════════════════════════════
+spring:
+  application:
+    name: predictive-maintenance-backend
+    version: 0.1.0
+
+  # ═════════════════════════════════════════════════════════════════
+  # 3. DATASOURCE - Conexión a PostgreSQL
+  # ═════════════════════════════════════════════════════════════════
+  datasource:
+    url: jdbc:postgresql://localhost:5432/predictive_maintenance_db
+    username: postgres
+    password: postgres123
+    driver-class-name: org.postgresql.Driver
+
+    # Pool de conexiones (HikariCP - incluido con Spring Boot)
+    hikari:
+      maximum-pool-size: 20        # Máximo de conexiones en pool
+      minimum-idle: 5              # Mínimo de conexiones disponibles
+      connection-timeout: 20000    # Timeout para obtener conexión
+      idle-timeout: 300000         # 5 minutos sin usar → cerrar
+      max-lifetime: 1200000        # 20 minutos máximo por conexión
+
+  # ═════════════════════════════════════════════════════════════════
+  # 4. JPA/HIBERNATE - ORM Configuration
+  # ═════════════════════════════════════════════════════════════════
+  jpa:
+    # ¿Qué hacer con el esquema en startup?
+    hibernate:
+      ddl-auto: update
+      # Opciones:
+      # - validate: Verifica que esquema coincida (error si no)
+      # - update: Crea tablas/columnas si faltan
+      # - create: Borra todo y recrea (PELIGRO - solo dev)
+      # - create-drop: Igual que create pero borra al shutdown
+      # - none: No hace nada (producción)
+
+    # Mostrar SQL en logs (útil para debug)
+    show-sql: false
+
+    # Formatear SQL en logs (haciéndolo más legible)
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 20              # Batch inserts para performance
+          fetch_size: 50
+        order_inserts: true            # Ordena inserts por tabla
+        order_updates: true
+        use_sql_comments: true         # Añade comentarios a SQL
+
+  # ═════════════════════════════════════════════════════════════════
+  # 5. REDIS - Cache Configuration
+  # ═════════════════════════════════════════════════════════════════
+  redis:
+    host: localhost
+    port: 6379
+    password:
+    timeout: 2000ms
+    database: 0                         # Base de datos (0-15)
+
+    # Jedis client config
+    jedis:
+      pool:
+        max-active: 8                  # Máximo de conexiones
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 6. LOGGING - Niveles y formatos
+# ═══════════════════════════════════════════════════════════════════
+logging:
+  level:
+    # Root logger - nivel por defecto
+    root: INFO
+
+    # Nuestro paquete - DEBUG (información detallada)
+    com.predictivemaintenance: DEBUG
+
+    # Spring Framework - INFO (solo events importantes)
+    org.springframework: INFO
+    org.springframework.web: DEBUG
+    org.springframework.data: DEBUG
+
+    # Hibernate SQL - DEBUG (ver queries)
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+    # Redis - INFO
+    io.lettuce: INFO
+
+  # Archivo de logs
+  file:
+    name: logs/application.log         # Ruta del archivo
+    max-size: 10MB                     # Rotar cuando alcance 10MB
+    max-history: 10                    # Mantener 10 archivos históricos
+
+  # Patrón de formato
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 7. SWAGGER/OpenAPI - Documentación automática
+# ═══════════════════════════════════════════════════════════════════
+springdoc:
+  swagger-ui:
+    enabled: true                      # Habilitar Swagger UI
+    path: /swagger-ui.html             # URL: http://localhost:8080/swagger-ui.html
+    try-it-out-enabled: true           # Botón "Try it out" para probar
+
+  api-docs:
+    path: /v3/api-docs                 # URL: http://localhost:8080/v3/api-docs
+
+  info:
+    title: Predictive Maintenance API
+    version: 0.1.0
+    description: Industrial IoT sensor data processing for predictive maintenance
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CONCEPTOS IMPORTANTES
+# ═══════════════════════════════════════════════════════════════════
+#
+# 1. PROFILES - Diferentes configs por ambiente
+#    ============================================
+#    development: DDL=update, SQL logging, Redis local
+#    production: DDL=none, SQL logging OFF, Redis cloud
+#
+#    Uso:
+#    - application.yml (config común)
+#    - application-dev.yml (solo para dev)
+#    - application-prod.yml (solo para prod)
+#
+#    Activar:
+#    java -jar app.jar --spring.profiles.active=prod
+#
+# 2. DATASOURCE CONNECTION POOLING
+#    ==============================
+#    Sin pool: Crear conexión para cada request = LENTO
+#    Con pool: Reutilizar conexiones = RÁPIDO
+#
+#    HikariCP (default en Spring Boot):
+#    - Muy rápido
+#    - Gestiona automáticamente
+#    - Configurable en application.yml
+#
+# 3. HIBERNATE DDL (Data Definition Language)
+#    ========================================
+#    ddl-auto: update
+#    - Compara Entity classes con BD
+#    - Crea/modifica tablas automáticamente
+#    - SOLO DEVELOPMENT
+#
+#    ddl-auto: validate
+#    - Solo verifica (no modifica)
+#    - Lanza error si hay diferencias
+#    - STAGING/TESTING
+#
+#    ddl-auto: none
+#    - No hace nada
+#    - Usamos migrations (Flyway/Liquibase)
+#    - PRODUCTION
+#
+# 4. LOGGING LEVELS
+#    ===============
+#    TRACE: Muy detallado (parámetros SQL)
+#    DEBUG: Información de debug (queries completas)
+#    INFO: Eventos importantes (app started, requests)
+#    WARN: Advertencias (deprecated, anomalías)
+#    ERROR: Errores (excepciones, fallos)
+#    FATAL: Fallos críticos (app crash)
+#
+#    Ejemplo:
+#    root: INFO → App logs en INFO
+#    org.hibernate.SQL: DEBUG → SQL queries detalladas
+#    org.springframework: INFO → Spring solo eventos importantes
+#
+# 5. REDIS CACHE
+#    ============
+#    host: localhost → Redis en máquina local
+#    port: 6379 → Puerto estándar Redis
+#    password: (vacío) → Sin autenticación (dev)
+#    database: 0 → Base de datos Redis (0-15 disponibles)
+#
+#    En producción:
+#    - host: redis-cloud-server.example.com
+#    - password: ***secure-password***
+#    - SSL/TLS habilitado
+#
+# 6. CONNECTION TIMEOUT vs IDLE TIMEOUT
+#    ===================================
+#    connection-timeout: 20s
+#    - Cuánto esperar para obtener conexión del pool
+#    - Si timeout → error (todas ocupadas)
+#
+#    idle-timeout: 5m
+#    - Cuánto tiempo una conexión puede estar sin usar
+#    - Después → cerrada automáticamente
+#    - Ahorra recursos
+#
+# 7. SWAGGER ENDPOINT MAPPING
+#    =========================
+#    http://localhost:8080/swagger-ui.html
+#    - Interfaz visual para probar API
+#    - Genera automáticamente desde @RestController
+#
+#    http://localhost:8080/v3/api-docs
+#    - JSON con OpenAPI schema
+#    - Usado por herramientas externas (Postman, etc)
+#
+
+# ═══════════════════════════════════════════════════════════════════
+# NEXT STEP - EN PRODUCCIÓN
+# ═══════════════════════════════════════════════════════════════════
+#
+# Crear application-prod.yml:
+# spring:
+#   datasource:
+#     url: jdbc:postgresql://prod-db-host:5432/db
+#     username: ${DB_USERNAME}    # Variables de entorno
+#     password: ${DB_PASSWORD}
+#   jpa:
+#     hibernate:
+#       ddl-auto: validate        # NO modificar BD
+#
+# Activar con:
+# java -jar app.jar --spring.profiles.active=prod
+#
