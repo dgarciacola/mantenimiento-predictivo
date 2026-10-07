@@ -29,6 +29,14 @@ check "POST lectura CRITICAL"                201 'CRITICAL'      POST "$BASE/dat
 check "POST temperatura fuera de rango"      400 '"status":400'  POST "$BASE/data" "{\"sensor_id\":\"$SID\",\"temperature\":150,\"vibration\":2,\"current\":10}"
 check "POST campo obligatorio ausente"       400 '"Validation Failed"' POST "$BASE/data" "{\"sensor_id\":\"$SID\",\"vibration\":2,\"current\":10}"
 check "GET historial existente"              200 '"totalReadings"' GET "$BASE/$SID/history"
+# Caché Redis: las 2 lecturas POST válidas deben estar en sensor:<id>:latest
+if command -v redis-cli >/dev/null 2>&1; then
+  N=$(redis-cli LLEN "sensor:$SID:latest")
+else
+  N=$(docker exec "$(docker ps --filter ancestor=redis:7-alpine -q | head -n1)" redis-cli LLEN "sensor:$SID:latest" 2>/dev/null)
+fi
+if [ "$N" = "2" ]; then echo "✅ Redis: 2 lecturas en sensor:$SID:latest"; PASS=$((PASS+1))
+else echo "❌ Redis: LLEN='$N' (esperado 2)"; FAIL=$((FAIL+1)); fi
 check "GET historial sensor inexistente"     404 '"Not Found"'   GET  "$BASE/motor-999-no-existe/history"
 check "GET rango temporal válido"            200 '"readings"'    GET  "$BASE/$SID/history/time-range?startTime=2020-01-01T00:00:00&endTime=2099-01-01T00:00:00"
 check "GET rango temporal invertido"         400 '"Invalid Sensor Data"' GET "$BASE/$SID/history/time-range?startTime=2099-01-01T00:00:00&endTime=2020-01-01T00:00:00"
